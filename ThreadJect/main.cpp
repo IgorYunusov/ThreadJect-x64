@@ -22,9 +22,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+#include <iostream>
 #include <stdio.h>
 #include <Windows.h>
 #include <TlHelp32.h>
+
+
+// todo:replace this with your dll
+#define TARGET_DLL_ADDRESS L"C:\\Users\\Rogue\\Downloads\\hello-world-x64.dll"
 
 typedef HMODULE(WINAPI *pLoadLibraryA)(LPCSTR);
 typedef FARPROC(WINAPI *pGetProcAddress)(HMODULE, LPCSTR);
@@ -46,9 +51,9 @@ DWORD WINAPI LoadDll(PVOID p)
 	PMANUAL_INJECT ManualInject;
 
 	HMODULE hModule;
-	DWORD i, Function, count, delta;
+	DWORD64 i, Function, count, delta;
 
-	PDWORD ptr;
+ DWORD64* ptr;
 	PWORD list;
 
 	PIMAGE_BASE_RELOCATION pIBR;
@@ -61,7 +66,7 @@ DWORD WINAPI LoadDll(PVOID p)
 	ManualInject = (PMANUAL_INJECT)p;
 
 	pIBR = ManualInject->BaseRelocation;
-	delta = (DWORD)((LPBYTE)ManualInject->ImageBase - ManualInject->NtHeaders->OptionalHeader.ImageBase); // Calculate the delta
+	delta = (DWORD64)((LPBYTE)ManualInject->ImageBase - ManualInject->NtHeaders->OptionalHeader.ImageBase); // Calculate the delta
 
 																										  // Relocate the image
 
@@ -76,7 +81,7 @@ DWORD WINAPI LoadDll(PVOID p)
 			{
 				if (list[i])
 				{
-					ptr = (PDWORD)((LPBYTE)ManualInject->ImageBase + (pIBR->VirtualAddress + (list[i] & 0xFFF)));
+					ptr = (DWORD64*)((LPBYTE)ManualInject->ImageBase + (pIBR->VirtualAddress + (list[i] & 0xFFF)));
 					*ptr += delta;
 				}
 			}
@@ -107,7 +112,7 @@ DWORD WINAPI LoadDll(PVOID p)
 			{
 				// Import by ordinal
 
-				Function = (DWORD)ManualInject->fnGetProcAddress(hModule, (LPCSTR)(OrigFirstThunk->u1.Ordinal & 0xFFFF));
+				Function = (DWORD64)ManualInject->fnGetProcAddress(hModule, (LPCSTR)(OrigFirstThunk->u1.Ordinal & 0xFFFF));
 
 				if (!Function)
 				{
@@ -122,7 +127,7 @@ DWORD WINAPI LoadDll(PVOID p)
 				// Import by name
 
 				pIBN = (PIMAGE_IMPORT_BY_NAME)((LPBYTE)ManualInject->ImageBase + OrigFirstThunk->u1.AddressOfData);
-				Function = (DWORD)ManualInject->fnGetProcAddress(hModule, (LPCSTR)pIBN->Name);
+				Function = (DWORD64)ManualInject->fnGetProcAddress(hModule, (LPCSTR)pIBN->Name);
 
 				if (!Function)
 				{
@@ -158,12 +163,20 @@ DWORD WINAPI LoadDllEnd()
 
 extern "C" NTSTATUS NTAPI RtlAdjustPrivilege(ULONG Privilege,BOOLEAN Enable,BOOLEAN CurrentThread,PBOOLEAN Enabled);
 
-char code[]=
-{
-	0x60, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x5B, 0x81, 0xEB, 0x06, 0x00, 0x00, 0x00, 0xB8, 0xCC, 0xCC, 0xCC, 0xCC, 0xBA, 0xCC, 0xCC, 0xCC, 0xCC, 0x52, 0xFF, 0xD0, 0x61, 0x68, 0xCC, 0xCC, 0xCC, 0xCC, 0xC3
-}; // x86 ONLY shellcode - will need to change for x64
-
-int main(int argc,char* argv[])
+UCHAR code[] = {
+  0x48, 0xB8, 0xF0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,   // mov -16 to rax
+  0x48, 0x21, 0xC4,                                             // and rsp, rax
+  0x48, 0x83, 0xEC, 0x20,                                       // subtract 32 from rsp
+  0x48, 0x8b, 0xEC,                                             // mov rbp, rsp
+  0x90, 0x90,                                                   // nop nop
+  0x48, 0xB9, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC,   // mov rcx,CCCCCCCCCCCCCCCC
+  0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,   // mov rax,AAAAAAAAAAAAAAAA
+  0xFF, 0xD0,                                                   // call rax
+  0x90,                                                         // nop
+  0x90,                                                         // nop
+  0xEB, 0xFC                                                    // JMP to nop
+};
+int main(int argc, char* argv[])
 {
 	
 	LPBYTE ptr;
@@ -187,14 +200,14 @@ int main(int argc,char* argv[])
 	te32.dwSize=sizeof(te32);
 	ctx.ContextFlags=CONTEXT_FULL;
 
-	if(argc!=3)
+	if(argc!=2)
 	{
-		printf("\nUsage: ThreadJect [PID] [DLL name]\n");
+		printf("\nUsage: ThreadJect [PID]\n");
 		return -1;
 	}
 
 	printf("\nOpening the DLL.\n");
-	hFile = CreateFile(argv[2], GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL); // Open the DLL
+	hFile = CreateFile(TARGET_DLL_ADDRESS, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL); // Open the DLL
 
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
@@ -333,9 +346,14 @@ int main(int argc,char* argv[])
 
 	printf("\nWriting loader code to target process.\n");
 
-	WriteProcessMemory(hProcess, mem1, &ManualInject, sizeof(MANUAL_INJECT), NULL); // Write the loader information to target process
-	WriteProcessMemory(hProcess, (PVOID)((PMANUAL_INJECT)mem1 + 1), LoadDll, (DWORD)LoadDllEnd - (DWORD)LoadDll, NULL); // Write the loader code to target process
+ if (!WriteProcessMemory(hProcess, mem1, &ManualInject, sizeof(MANUAL_INJECT), NULL))
+   std::cout << "Error " << std::hex << GetLastError() << std::endl;
+ //std::cout << "LoadDllSize " << std::dec << (DWORD64)LoadDllEnd - (DWORD64)LoadDll << std::endl;
 
+ // some fat fucking error here.. writing LoadDll directly appears to write a bunch of JMP instructions to undefined memory and the sizes are messed
+ if (!WriteProcessMemory(hProcess, (PVOID)((PMANUAL_INJECT)mem1 + 1), LoadDll, 4096 - sizeof(MANUAL_INJECT), NULL))
+   std::cout << "Error " << std::hex << GetLastError() << std::endl;
+ std::cout << "LoadDllAddress " << std::hex << (PVOID)((PMANUAL_INJECT)mem1 + 1) << std::endl;
 	hSnap=CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD,0);
 
 	Thread32First(hSnap,&te32);
@@ -385,34 +403,24 @@ int main(int argc,char* argv[])
 
 	buffer=VirtualAlloc(NULL,65536,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);
 	ptr=(LPBYTE)buffer;
-
+ ZeroMemory(buffer, 65536);
 	memcpy(buffer,code,sizeof(code));
 
-	while(1)
-	{
-		if(*ptr==0xb8 && *(PDWORD)(ptr+1)==0xCCCCCCCC)
-		{
-			*(PDWORD)(ptr+1)=(DWORD)((PMANUAL_INJECT)mem1 + 1);
-		}
+	 for (BYTE* ptr = (LPBYTE)buffer; ptr < ((LPBYTE)buffer + 300); ptr++)
+	 {
+	   DWORD64 address = *(DWORD64*)ptr;
+	   if (address == 0xCCCCCCCCCCCCCCCC)
+	   {
+	     std::cout << "Writing param 1 (rcx)" << std::endl;
+	     *(DWORD64*)ptr = (DWORD64)mem1;
+	   }
 
-		if(*ptr==0x68 && *(PDWORD)(ptr+1)==0xCCCCCCCC)
-		{
-			*(PDWORD)(ptr+1)=ctx.Eip;
-		}
-
-		if (*ptr == 0xba && *(PDWORD)(ptr + 1) == 0xCCCCCCCC)
-		{
-			*(PDWORD)(ptr + 1) = (DWORD)(mem1);
-		}
-
-		if(*ptr==0xc3)
-		{
-			ptr++;
-			break;
-		}
-
-		ptr++;
-	}
+	   if (address == 0xAAAAAAAAAAAAAAAA)
+	   {
+	     std::cout << "Writing function address (rax)" << std::endl;
+	     *(DWORD64*)ptr = (DWORD64)((PMANUAL_INJECT)mem1 + 1);
+	   }
+	 }
 
 	printf("\nWriting shellcode into target process.\n");
 
@@ -430,7 +438,7 @@ int main(int argc,char* argv[])
 		return -1;
 	}
 
-	ctx.Eip=(DWORD)mem;
+	ctx.Rip=(DWORD64)mem;
 
 	printf("\nHijacking target thread.\n");
 
@@ -448,8 +456,7 @@ int main(int argc,char* argv[])
 		return -1;
 	}
 
-	printf("\nResuming target thread.\n");
-
+ std::cout << "Resuming target thread at " << std::hex << ctx.Rip << std::endl;
 	ResumeThread(hThread);
 
 	CloseHandle(hThread);

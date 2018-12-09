@@ -1,4 +1,4 @@
-Modified for x64
+Modified for x64 and included a hello world dll to test with ```hello-world-x64.dll```
 
 # ThreadJect
 ## Description

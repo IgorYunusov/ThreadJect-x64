@@ -350,7 +350,7 @@ int main(int argc, char* argv[])
    std::cout << "Error " << std::hex << GetLastError() << std::endl;
  //std::cout << "LoadDllSize " << std::dec << (DWORD64)LoadDllEnd - (DWORD64)LoadDll << std::endl;
 
- // some fat fucking error here.. writing LoadDll directly appears to write a bunch of JMP instructions to undefined memory and the sizes are messed
+ // FIXED by removing optimiations : some fat fucking error here.. writing LoadDll directly appears to write a bunch of JMP instructions to undefined memory and the sizes are messed
  if (!WriteProcessMemory(hProcess, (PVOID)((PMANUAL_INJECT)mem1 + 1), LoadDll, 4096 - sizeof(MANUAL_INJECT), NULL))
    std::cout << "Error " << std::hex << GetLastError() << std::endl;
  std::cout << "LoadDllAddress " << std::hex << (PVOID)((PMANUAL_INJECT)mem1 + 1) << std::endl;

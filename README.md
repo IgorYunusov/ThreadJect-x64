@@ -1,6 +1,6 @@
-Modified for x64 and included a hello world dll to test with ```hello-world-x64.dll```
+Modified for x64 <del> and included a hello world dll to test with ```hello-world-x64.dll``` </del>
 
-DLL is hardcoded
+DLL path is hardcoded
 
 And also hijacks the thread permanently
 [![Demonstration](https://i.imgur.com/1lJp0UX.png)](https://i.imgur.com/1lJp0UX.png)
@@ -26,10 +26,10 @@ Proof-of-Concept Manual DLL Injector that hijacks a thread in order to load dll 
 13. Resume target thread - should be injected now
 ## Usage
 ```
-ThreadJect.exe <PID> <DLL Name>
+ThreadJect.exe <PID>
 ```
 ## Credits
 ```
 @ZwClose7 on Rohitab - Base LoadLibrary Injector (uses Thread Hijacking) and his CreateRemoteThread Manual DLL Injector
-@D4stiny (me) - Modified LoadLibrary Injector by adding code from the CreateRemoteThread injector and changing the shellcode that is used in the thread hijacking to support the manual mapping of the DLL.
+@D4stiny - Modified LoadLibrary Injector by adding code from the CreateRemoteThread injector and changing the shellcode that is used in the thread hijacking to support the manual mapping of the DLL.
 ```

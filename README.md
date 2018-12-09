@@ -1,3 +1,5 @@
+Modified for x64
+
 # ThreadJect
 ## Description
 Proof-of-Concept Manual DLL Injector that hijacks a thread in order to load dll into target process.
